@@ -1,0 +1,1421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>LifeTracker OS</title>
+  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    /* ── Design Tokens ──────────────────────────────────────────── */
+    :root {
+      --bg-base:      #08090E;
+      --bg-surface:   #10121A;
+      --bg-elevated:  #181B26;
+      --bg-hover:     #1F2334;
+      --pulse:        #FF2D6B;
+      --pulse-dim:    rgba(255,45,107,0.12);
+      --pulse-glow:   rgba(255,45,107,0.35);
+      --signal:       #3DDBC0;
+      --signal-dim:   rgba(61,219,192,0.12);
+      --ember:        #FF9A3C;
+      --ember-dim:    rgba(255,154,60,0.15);
+      --violet:       #9B8DFF;
+      --violet-dim:   rgba(155,141,255,0.12);
+      --success:      #1ECC9A;
+      --t1:           #EAEEf8;
+      --t2:           #6E7A96;
+      --t3:           #3A4158;
+      --border:       rgba(255,255,255,0.06);
+      --border-hi:    rgba(255,255,255,0.12);
+    }
+
+    /* ── Reset & Base ───────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body {
+      background: var(--bg-base);
+      color: var(--t1);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+    button { font-family: inherit; cursor: pointer; }
+    input, textarea, select { font-family: inherit; }
+    textarea { resize: vertical; }
+
+    /* ── Scrollbar ──────────────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--t3); border-radius: 99px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--t2); }
+
+    /* ── Animations ─────────────────────────────────────────────── */
+    @keyframes scanRotate  { to { transform: rotate(360deg); } }
+    @keyframes heartBeat   { 0%,100%{transform:scale(1)} 50%{transform:scale(1.18)} }
+    @keyframes pingRipple  { 0%{transform:scale(.3);opacity:.9} 100%{transform:scale(2.2);opacity:0} }
+    @keyframes fadeUp      { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+    @keyframes checkPop    { 0%{transform:scale(0)} 70%{transform:scale(1.2)} 100%{transform:scale(1)} }
+    @keyframes shimmer     { 0%{background-position:-400px 0} 100%{background-position:400px 0} }
+    @keyframes pulseOpacity{ 0%,100%{opacity:1} 50%{opacity:.4} }
+
+    .scan-arm    { transform-origin: 24px 24px; animation: scanRotate 4s linear infinite; }
+    .heart-beat  { transform-origin: 24px 22px; animation: heartBeat 1.4s ease-in-out infinite; }
+    .ping-ring   { transform-origin: 24px 22px; animation: pingRipple 2s ease-out infinite; }
+    .ping-ring-2 { transform-origin: 24px 22px; animation: pingRipple 2s ease-out infinite; animation-delay: .9s; }
+    .anim-up     { animation: fadeUp .28s ease-out forwards; }
+    .check-pop   { animation: checkPop .22s ease-out forwards; }
+
+    /* ── Layout Shell ───────────────────────────────────────────── */
+    #app { display: flex; min-height: 100vh; }
+
+    .sidebar {
+      width: 228px;
+      min-height: 100vh;
+      background: var(--bg-surface);
+      border-right: 1px solid var(--border);
+      position: fixed; left: 0; top: 0; z-index: 60;
+      display: flex; flex-direction: column;
+    }
+    .sidebar-logo {
+      display: flex; align-items: center; gap: 11px;
+      padding: 20px 18px 14px;
+    }
+    .sidebar-wordmark { line-height: 1; }
+    .sidebar-wordmark strong { display: block; font-size: 15px; font-weight: 800; letter-spacing: -.03em; color: var(--t1); }
+    .sidebar-wordmark span  { display: block; font-size: 9.5px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--t3); margin-top: 1px; }
+
+    .sidebar-date {
+      font-size: 11px; color: var(--t2); padding: 0 18px 14px;
+      letter-spacing: .01em;
+    }
+    .sidebar-divider { height: 1px; background: var(--border); margin: 0 0 6px; }
+
+    .sidebar-nav { flex: 1; padding: 0 8px; }
+
+    .nav-btn {
+      width: 100%; display: flex; align-items: center; gap: 10px;
+      padding: 9px 10px; border-radius: 9px; border: none; background: none;
+      color: var(--t2); font-size: 13px; font-weight: 500;
+      transition: all .18s; text-align: left; margin: 1px 0;
+    }
+    .nav-btn:hover { background: var(--bg-hover); color: var(--t1); }
+    .nav-btn.active {
+      background: var(--pulse-dim);
+      color: var(--pulse);
+      border: 1px solid rgba(255,45,107,.18);
+    }
+    .nav-btn svg { flex-shrink: 0; }
+
+    .sidebar-footer {
+      padding: 14px 18px;
+      border-top: 1px solid var(--border);
+      font-size: 10.5px; color: var(--t3); font-weight: 500; letter-spacing: .02em;
+    }
+
+    /* ── Mobile Header ──────────────────────────────────────────── */
+    .mob-header {
+      display: none;
+      position: fixed; top: 0; left: 0; right: 0; z-index: 60;
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 16px;
+      align-items: center; justify-content: space-between;
+    }
+    .mob-header-brand { display: flex; align-items: center; gap: 9px; }
+    .mob-header-brand strong { font-size: 15px; font-weight: 800; letter-spacing: -.02em; }
+    .mob-date { font-size: 11px; color: var(--t2); }
+
+    /* ── Bottom Nav (mobile) ────────────────────────────────────── */
+    .bot-nav {
+      display: none;
+      position: fixed; bottom: 0; left: 0; right: 0; z-index: 60;
+      background: var(--bg-surface);
+      border-top: 1px solid var(--border);
+      padding: 6px 0 env(safe-area-inset-bottom, 6px);
+    }
+    .bot-nav-inner { display: flex; }
+    .bot-btn {
+      flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px;
+      background: none; border: none; padding: 5px 0;
+      font-size: 9.5px; font-weight: 500; letter-spacing: .02em; text-transform: uppercase;
+      color: var(--t3); transition: color .18s;
+    }
+    .bot-btn.active { color: var(--pulse); }
+
+    /* ── Main Content ───────────────────────────────────────────── */
+    .main { margin-left: 228px; flex: 1; padding: 28px; max-width: 100%; }
+
+    /* ── Responsive Breakpoints ─────────────────────────────────── */
+    @media (max-width: 768px) {
+      .sidebar { display: none; }
+      .mob-header { display: flex; }
+      .bot-nav { display: block; }
+      .main { margin-left: 0; padding: 70px 14px 80px; }
+    }
+
+    /* ── Glass Cards ────────────────────────────────────────────── */
+    .card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      transition: border-color .2s;
+    }
+    .card:hover { border-color: var(--border-hi); }
+    .card-inner {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+    }
+
+    /* ── Stat Cards ─────────────────────────────────────────────── */
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    .stat-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px;
+      transition: all .2s;
+    }
+    .stat-card:hover { border-color: var(--border-hi); transform: translateY(-1px); }
+    .stat-label { font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--t3); margin-bottom: 6px; }
+    .stat-value { font-size: 30px; font-weight: 800; letter-spacing: -.04em; line-height: 1; margin-bottom: 6px; }
+    .stat-sub { font-size: 11px; color: var(--t2); }
+
+    /* ── Progress ───────────────────────────────────────────────── */
+    .track { height: 4px; background: var(--border); border-radius: 99px; overflow: hidden; }
+    .fill  {
+      height: 100%; border-radius: 99px;
+      background: linear-gradient(90deg, var(--pulse), #FF7DA0);
+      transition: width .5s cubic-bezier(.4,0,.2,1);
+    }
+    .fill-teal { background: linear-gradient(90deg, var(--signal), #7AEEDD); }
+    .fill-violet { background: linear-gradient(90deg, var(--violet), #C4BBFF); }
+    .fill-ember  { background: linear-gradient(90deg, var(--ember), #FFCC80); }
+
+    /* ── Streak Badge ───────────────────────────────────────────── */
+    .streak {
+      display: inline-flex; align-items: center; gap: 3px;
+      padding: 2px 7px; border-radius: 99px;
+      font-size: 10px; font-weight: 700;
+      background: var(--ember-dim); color: var(--ember);
+      border: 1px solid rgba(255,154,60,.2);
+      white-space: nowrap;
+    }
+
+    /* ── Habit Check ────────────────────────────────────────────── */
+    .hcheck {
+      width: 22px; height: 22px; border-radius: 7px; flex-shrink: 0;
+      border: 1.5px solid var(--border-hi);
+      background: transparent; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: all .18s;
+    }
+    .hcheck:hover { border-color: var(--pulse); background: var(--pulse-dim); }
+    .hcheck.on {
+      background: var(--pulse); border-color: var(--pulse);
+      box-shadow: 0 0 10px var(--pulse-glow);
+    }
+    .hcheck.on svg { animation: checkPop .2s ease-out; }
+
+    /* ── Inputs ─────────────────────────────────────────────────── */
+    .inp {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      color: var(--t1); padding: 9px 12px; font-size: 13px;
+      width: 100%; outline: none;
+      transition: border-color .18s, box-shadow .18s;
+    }
+    .inp:focus {
+      border-color: var(--pulse);
+      box-shadow: 0 0 0 3px var(--pulse-dim);
+    }
+    .inp::placeholder { color: var(--t3); }
+    select.inp { cursor: pointer; }
+    textarea.inp { min-height: 88px; line-height: 1.55; }
+
+    /* ── Buttons ────────────────────────────────────────────────── */
+    .btn-p {
+      background: var(--pulse); color: #fff; border: none;
+      border-radius: 9px; padding: 9px 16px; font-size: 13px; font-weight: 600;
+      transition: all .18s; white-space: nowrap;
+      display: inline-flex; align-items: center; gap: 6px;
+    }
+    .btn-p:hover { background: #FF1A58; box-shadow: 0 4px 16px var(--pulse-glow); transform: translateY(-1px); }
+    .btn-p:active { transform: translateY(0); }
+
+    .btn-s {
+      background: var(--bg-elevated); color: var(--t1);
+      border: 1px solid var(--border); border-radius: 9px;
+      padding: 9px 14px; font-size: 13px; font-weight: 500;
+      transition: all .18s;
+      display: inline-flex; align-items: center; gap: 6px;
+    }
+    .btn-s:hover { background: var(--bg-hover); border-color: var(--border-hi); }
+
+    .btn-g {
+      background: transparent; color: var(--t2);
+      border: 1px solid var(--border); border-radius: 8px;
+      padding: 7px 12px; font-size: 12px; font-weight: 500;
+      transition: all .18s;
+      display: inline-flex; align-items: center; gap: 5px;
+    }
+    .btn-g:hover { background: var(--bg-hover); color: var(--t1); border-color: var(--border-hi); }
+
+    .btn-icon {
+      background: none; border: none; padding: 4px; cursor: pointer;
+      color: var(--t3); border-radius: 5px; transition: all .15s;
+      display: flex; align-items: center;
+    }
+    .btn-icon:hover { color: var(--t1); background: var(--bg-hover); }
+    .btn-icon.danger:hover { color: #FF4D4D; }
+
+    /* ── Section Headers ────────────────────────────────────────── */
+    .page-title { font-size: 21px; font-weight: 800; letter-spacing: -.03em; color: var(--t1); }
+    .page-sub   { font-size: 12px; color: var(--t2); margin-top: 2px; }
+    .page-header { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; margin-bottom: 22px; }
+    .page-header-left {}
+    .page-header-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+    .sec-label { font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--t3); }
+
+    /* ── Divider ────────────────────────────────────────────────── */
+    .div { height: 1px; background: var(--border); }
+
+    /* ── Mood Buttons ───────────────────────────────────────────── */
+    .mood-btn {
+      width: 42px; height: 42px; border-radius: 50%; border: 2px solid transparent;
+      background: var(--bg-elevated); font-size: 20px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: all .18s;
+    }
+    .mood-btn:hover { transform: scale(1.15); border-color: var(--border-hi); }
+    .mood-btn.active { border-color: var(--pulse); background: var(--pulse-dim); transform: scale(1.15); }
+
+    /* ── Category chips ─────────────────────────────────────────── */
+    .chip {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 2px 8px; border-radius: 99px; font-size: 10px; font-weight: 700; border: 1px solid;
+    }
+    .chip-h  { color: #3DDBC0; background: rgba(61,219,192,.1);  border-color: rgba(61,219,192,.25); }
+    .chip-m  { color: #9B8DFF; background: rgba(155,141,255,.1); border-color: rgba(155,141,255,.25); }
+    .chip-p  { color: #60A5FA; background: rgba(96,165,250,.1);  border-color: rgba(96,165,250,.25); }
+    .chip-s  { color: var(--ember); background: var(--ember-dim); border-color: rgba(255,154,60,.25); }
+    .chip-o  { color: var(--t2); background: rgba(110,122,150,.1); border-color: rgba(110,122,150,.2); }
+
+    /* ── Habit Grid (Monthly) ───────────────────────────────────── */
+    .hgrid { border-collapse: collapse; width: 100%; font-size: 11.5px; }
+    .hgrid th, .hgrid td { border: 1px solid var(--border); }
+    .hgrid thead th {
+      background: var(--bg-elevated); color: var(--t2);
+      font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em;
+      padding: 8px 3px; text-align: center;
+    }
+    .hgrid thead th.sticky-col {
+      text-align: left; padding: 8px 14px;
+      position: sticky; left: 0; z-index: 5;
+    }
+    .hgrid tbody td.habit-name-cell {
+      padding: 7px 14px; position: sticky; left: 0; z-index: 4;
+      background: var(--bg-surface); white-space: nowrap;
+    }
+    .hgrid tbody tr:hover td.habit-name-cell { background: var(--bg-elevated); }
+    .hgrid tbody td.check-cell {
+      padding: 4px 2px; text-align: center; cursor: pointer;
+      transition: background .12s;
+    }
+    .hgrid tbody td.check-cell:hover { background: var(--pulse-dim); }
+    .hgrid tbody td.prog-cell {
+      padding: 6px 14px; text-align: center;
+      background: var(--bg-surface);
+    }
+    .hgrid tfoot td {
+      background: var(--bg-elevated); padding: 3px 2px; vertical-align: bottom;
+    }
+    .hgrid tfoot td.sticky-col { position: sticky; left: 0; z-index: 4; padding: 8px 14px; text-align: right; }
+    .today-col { background: rgba(255,45,107,.05) !important; }
+    .today-head { color: var(--pulse) !important; }
+
+    /* ── Day dot ────────────────────────────────────────────────── */
+    .today-dot { width: 4px; height: 4px; border-radius: 50%; background: var(--pulse); margin: 3px auto 0; box-shadow: 0 0 5px var(--pulse); }
+
+    /* ── Mini bar ───────────────────────────────────────────────── */
+    .mini-bar { border-radius: 2px 2px 0 0; min-height: 2px; background: var(--t3); }
+    .mini-bar.has-some { background: rgba(255,45,107,.4); }
+    .mini-bar.full-day { background: var(--pulse); box-shadow: 0 0 6px var(--pulse-glow); }
+
+    /* ── Grid cell check box ────────────────────────────────────── */
+    .cell-box {
+      width: 18px; height: 18px; border-radius: 4px; margin: 0 auto;
+      border: 1px solid var(--border); background: transparent;
+      display: flex; align-items: center; justify-content: center;
+      transition: all .15s;
+    }
+    .cell-box.on {
+      background: var(--pulse); border-color: var(--pulse);
+      box-shadow: 0 0 6px var(--pulse-glow);
+    }
+
+    /* ── Day Selector Strip ─────────────────────────────────────── */
+    .day-strip { display: flex; gap: 7px; overflow-x: auto; padding-bottom: 3px; margin-bottom: 18px; }
+    .day-strip::-webkit-scrollbar { height: 3px; }
+    .day-btn {
+      display: flex; flex-direction: column; align-items: center; gap: 3px;
+      min-width: 62px; padding: 10px 10px; border-radius: 11px;
+      border: 1px solid var(--border); background: var(--bg-elevated);
+      cursor: pointer; transition: all .18s; color: var(--t2);
+    }
+    .day-btn:hover { border-color: var(--border-hi); color: var(--t1); }
+    .day-btn.active { background: var(--pulse); border-color: var(--pulse); color: #fff; box-shadow: 0 4px 16px var(--pulse-glow); }
+    .day-btn.is-today:not(.active) { border-color: rgba(255,45,107,.3); color: var(--pulse); }
+    .day-name-short { font-size: 9px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; opacity: .7; }
+    .day-num-big    { font-size: 20px; font-weight: 800; letter-spacing: -.04em; line-height: 1; }
+    .day-mini-track { width: 28px; height: 3px; border-radius: 99px; background: rgba(255,255,255,.12); overflow: hidden; margin-top: 2px; }
+    .day-mini-fill  { height: 100%; border-radius: 99px; background: #fff; opacity: .6; transition: width .3s; }
+    .day-btn.active .day-mini-fill { opacity: 1; }
+    .day-btn:not(.active) .day-mini-fill { background: var(--pulse); opacity: 1; }
+
+    /* ── Planner Layout ─────────────────────────────────────────── */
+    .planner-grid { display: grid; grid-template-columns: 1fr 264px; gap: 16px; }
+    @media (max-width: 860px) { .planner-grid { grid-template-columns: 1fr; } }
+
+    /* ── Today Layout ───────────────────────────────────────────── */
+    .today-two { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    @media (max-width: 640px) { .today-two { grid-template-columns: 1fr; } }
+    .today-full { grid-column: 1 / -1; }
+
+    /* ── Analytics bar chart ────────────────────────────────────── */
+    .leaderboard-row { display: flex; align-items: center; gap: 11px; }
+    .leaderboard-rank { width: 18px; font-size: 11px; font-weight: 700; color: var(--t3); text-align: right; flex-shrink: 0; }
+    .leaderboard-emoji { font-size: 16px; flex-shrink: 0; }
+    .leaderboard-body  { flex: 1; min-width: 0; }
+    .leaderboard-name  { font-size: 12.5px; font-weight: 500; display: flex; justify-content: space-between; margin-bottom: 4px; }
+    .leaderboard-pct   { font-weight: 700; flex-shrink: 0; margin-left: 8px; }
+
+    /* ── Manage form grid ───────────────────────────────────────── */
+    .manage-form-grid { display: grid; grid-template-columns: 52px 1fr 150px auto; gap: 9px; align-items: center; }
+    @media (max-width: 600px) { .manage-form-grid { grid-template-columns: 52px 1fr; row-gap: 8px; } .manage-form-grid .btn-p { grid-column: 2; } }
+
+    /* ── Task item ──────────────────────────────────────────────── */
+    .task-row {
+      display: flex; align-items: center; gap: 9px;
+      padding: 8px 10px; border-radius: 8px;
+      background: var(--bg-elevated); margin-bottom: 5px;
+      transition: background .15s;
+    }
+    .task-row:hover { background: var(--bg-hover); }
+    .task-text { flex: 1; font-size: 13px; color: var(--t1); }
+    .task-text.done { color: var(--t3); text-decoration: line-through; }
+
+    /* ── Empty state ────────────────────────────────────────────── */
+    .empty { text-align: center; padding: 36px 20px; color: var(--t2); font-size: 12.5px; }
+    .empty-icon { font-size: 28px; margin-bottom: 8px; }
+
+    /* ── Habit list item (Today) ────────────────────────────────── */
+    .habit-tile {
+      display: flex; align-items: center; gap: 9px;
+      padding: 9px 11px; border-radius: 9px; cursor: pointer;
+      border: 1px solid var(--border); background: var(--bg-elevated);
+      transition: all .18s;
+    }
+    .habit-tile:hover { border-color: var(--border-hi); }
+    .habit-tile.done { background: rgba(255,45,107,.06); border-color: rgba(255,45,107,.22); }
+    .habit-tile-name {
+      flex: 1; font-size: 12.5px; font-weight: 500; color: var(--t1);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      transition: color .18s;
+    }
+    .habit-tile.done .habit-tile-name { color: var(--t2); text-decoration: line-through; }
+
+    /* ── Circ SVG ───────────────────────────────────────────────── */
+    .circ-bg   { fill: none; stroke: rgba(255,255,255,.07); stroke-width: 3.5; }
+    .circ-fill { fill: none; stroke-width: 3.5; stroke-linecap: round; transition: stroke-dasharray .55s cubic-bezier(.4,0,.2,1); }
+    .circ-num  { font-size: 7px; font-weight: 800; text-anchor: middle; fill: var(--t1); }
+    .circ-sub  { font-size: 3.5px; text-anchor: middle; fill: var(--t2); }
+  </style>
+</head>
+<body>
+<div id="app-root"></div>
+
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback } = React;
+
+// ── Utilities ─────────────────────────────────────────────────────────────────
+const todayStr = () => new Date().toISOString().split('T')[0];
+const getDaysInMonth = (y,m) => new Date(y,m+1,0).getDate();
+const getDatesOfMonth = (y,m) => {
+  const days = getDaysInMonth(y,m);
+  const todayS = todayStr();
+  return Array.from({length:days},(_,i)=>{
+    const d = new Date(y,m,i+1);
+    const ds = d.toISOString().split('T')[0];
+    return {
+      dateStr: ds, dayNum: i+1,
+      dow: d.toLocaleDateString('en-US',{weekday:'short'}).slice(0,1),
+      dowFull: d.toLocaleDateString('en-US',{weekday:'short'}),
+      isToday: ds===todayS,
+      isWeekend: d.getDay()===0||d.getDay()===6
+    };
+  });
+};
+const getWeek = (base=new Date()) => {
+  const s=new Date(base), day=s.getDay();
+  s.setDate(s.getDate()-day+(day===0?-6:1));
+  const todayS=todayStr();
+  return Array.from({length:7},(_,i)=>{
+    const d=new Date(s); d.setDate(d.getDate()+i);
+    const ds=d.toISOString().split('T')[0];
+    return {
+      dateStr:ds,
+      dayName:d.toLocaleDateString('en-US',{weekday:'long'}),
+      dayShort:d.toLocaleDateString('en-US',{weekday:'short'}),
+      formattedStr:d.toLocaleDateString('en-GB').replace(/\//g,'.'),
+      dayNum:d.getDate(),
+      monthShort:d.toLocaleDateString('en-US',{month:'short'}),
+      isToday: ds===todayS
+    };
+  });
+};
+const getStreak = (habitId, habitLogs) => {
+  let s=0; const d=new Date();
+  for(let i=0;i<400;i++){
+    const ds=d.toISOString().split('T')[0];
+    if(habitLogs[ds]?.[habitId]){ s++; d.setDate(d.getDate()-1); } else break;
+  }
+  return s;
+};
+const getLongestStreak = (habitId, habitLogs) => {
+  const dates=Object.keys(habitLogs).sort();
+  let max=0,cur=0,prev=null;
+  for(const ds of dates){
+    if(habitLogs[ds]?.[habitId]){
+      if(prev){const diff=(new Date(ds)-new Date(prev))/86400000; cur=diff===1?cur+1:1;}else cur=1;
+      max=Math.max(max,cur); prev=ds;
+    } else {prev=null;cur=0;}
+  }
+  return max;
+};
+const fmtDate = d => d.toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+const greet = () => {const h=new Date().getHours(); return h<12?'Morning':h<17?'Afternoon':'Evening';};
+const downloadCSV = (content, name) => {
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([content],{type:'text/csv'}));
+  a.download=name; a.click();
+};
+
+// ── Constants ─────────────────────────────────────────────────────────────────
+const CATS = {
+  health:      {label:'Health',     emoji:'💪', chip:'chip-h'},
+  mind:        {label:'Mindset',    emoji:'🧠', chip:'chip-m'},
+  productivity:{label:'Productivity',emoji:'⚡',chip:'chip-p'},
+  social:      {label:'Social',     emoji:'🤝', chip:'chip-s'},
+  other:       {label:'Other',      emoji:'✦',  chip:'chip-o'},
+};
+const MOODS=[
+  {emoji:'😔',label:'Low',v:1},
+  {emoji:'😐',label:'Meh',v:2},
+  {emoji:'🙂',label:'Okay',v:3},
+  {emoji:'😊',label:'Good',v:4},
+  {emoji:'🔥',label:'Lit',v:5},
+];
+const DEFAULT_HABITS = [
+  {id:'1',name:'Wake up at 05:00',emoji:'⏰',category:'productivity'},
+  {id:'2',name:'Gym session',emoji:'🏋️',category:'health'},
+  {id:'3',name:'No adult content',emoji:'🛑',category:'mind'},
+  {id:'4',name:'Read / Learn',emoji:'📚',category:'mind'},
+  {id:'5',name:'Budget tracking',emoji:'💸',category:'productivity'},
+  {id:'6',name:'Project work',emoji:'💻',category:'productivity'},
+  {id:'7',name:'No alcohol',emoji:'🚫',category:'health'},
+  {id:'8',name:'Social media detox',emoji:'📱',category:'mind'},
+  {id:'9',name:'Goal journaling',emoji:'📓',category:'mind'},
+  {id:'10',name:'Cold shower',emoji:'🚿',category:'health'},
+];
+const NAV=[
+  {id:'today',label:'Today',   icon:(a)=><IcoToday a={a}/>},
+  {id:'habits',label:'Habits', icon:(a)=><IcoHabits a={a}/>},
+  {id:'planner',label:'Planner',icon:(a)=><IcoPlanner a={a}/>},
+  {id:'analytics',label:'Analytics',icon:(a)=><IcoAnalytics a={a}/>},
+  {id:'manage',label:'Manage', icon:(a)=><IcoManage a={a}/>},
+];
+
+// ── SVG Icons ─────────────────────────────────────────────────────────────────
+const S={width:17,height:17,viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth:2,strokeLinecap:"round",strokeLinejoin:"round"};
+const IcoToday=({a})=><svg {...S}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>;
+const IcoHabits=({a})=><svg {...S}><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>;
+const IcoPlanner=({a})=><svg {...S}><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>;
+const IcoAnalytics=({a})=><svg {...S}><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>;
+const IcoManage=({a})=><svg {...S}><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>;
+const IcoCheck=()=><svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="2 6 5 9 10 3"/></svg>;
+const IcoTrash=()=><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M9 6V4h6v2"/></svg>;
+const IcoPlus=()=><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>;
+const IcoPrev=()=><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>;
+const IcoNext=()=><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>;
+const IcoFlame=()=><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M17.66 11.2C17.43 10.9 17.15 10.64 16.89 10.38C16.22 9.78 15.46 9.35 14.82 8.72C13.33 7.26 13 4.85 13.95 3C13 3.23 12.17 3.75 11.46 4.32C8.87 6.4 7.85 10.07 9.07 13.22C9.11 13.32 9.15 13.42 9.15 13.55C9.15 13.77 9 13.97 8.8 14.05C8.57 14.15 8.33 14.09 8.14 13.93C8.08 13.88 8.04 13.83 8 13.76C6.87 12.33 6.69 10.28 7.45 8.64C5.78 10 4.87 12.3 5 14.47C5.06 14.97 5.12 15.47 5.29 15.97C5.43 16.57 5.7 17.17 6 17.7C7.08 19.43 8.95 20.67 10.96 20.92C13.1 21.19 15.39 20.8 17.03 19.32C18.86 17.66 19.5 15 18.56 12.72L18.43 12.46C18.22 12 17.66 11.2 17.66 11.2Z"/></svg>;
+const IcoExport=()=><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>;
+
+// ── Radar Logo ─────────────────────────────────────────────────────────────────
+function RadarLogo({size=38}) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" overflow="visible">
+      <defs>
+        <linearGradient id="scanGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stopColor="rgba(61,219,192,0)"/>
+          <stop offset="100%" stopColor="rgba(61,219,192,0.9)"/>
+        </linearGradient>
+        <radialGradient id="pingGrad" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="rgba(255,45,107,0.6)"/>
+          <stop offset="100%" stopColor="rgba(255,45,107,0)"/>
+        </radialGradient>
+      </defs>
+      {/* Radar rings */}
+      <circle cx="24" cy="24" r="21" fill="none" stroke="rgba(61,219,192,0.15)" strokeWidth="1"/>
+      <circle cx="24" cy="24" r="14" fill="none" stroke="rgba(61,219,192,0.2)" strokeWidth="1"/>
+      <circle cx="24" cy="24" r="7" fill="none" stroke="rgba(61,219,192,0.3)" strokeWidth="1"/>
+      {/* Cross hairs */}
+      <line x1="24" y1="3" x2="24" y2="45" stroke="rgba(61,219,192,0.1)" strokeWidth="0.6"/>
+      <line x1="3" y1="24" x2="45" y2="24" stroke="rgba(61,219,192,0.1)" strokeWidth="0.6"/>
+      {/* Rotating scan beam */}
+      <g className="scan-arm">
+        <path d="M24 24 L45 24" stroke="url(#scanGrad)" strokeWidth="1.4" strokeLinecap="round"/>
+        <circle cx="24" cy="24" r="1.5" fill="rgba(61,219,192,0.4)"/>
+      </g>
+      {/* Ping ripple rings from heart center */}
+      <circle className="ping-ring"   cx="24" cy="22" r="5" fill="none" stroke="rgba(255,45,107,0.55)" strokeWidth="1.2"/>
+      <circle className="ping-ring-2" cx="24" cy="22" r="5" fill="none" stroke="rgba(255,45,107,0.35)" strokeWidth="1"/>
+      {/* Heart at center */}
+      <g className="heart-beat">
+        <path d="M24 26 C24 26 16.5 20.5 16.5 15.5 C16.5 12.5 19 11 21.5 11 C22.8 11 24 12 24 12 C24 12 25.2 11 26.5 11 C29 11 31.5 12.5 31.5 15.5 C31.5 20.5 24 26 24 26Z"
+          fill="#FF2D6B" transform="translate(0,-1) scale(0.56) translate(-24,-22)"
+          style={{transformOrigin:'24px 22px'}}/>
+        {/* simpler small heart */}
+        <path d="M24,25.5 C21,22.5 17.5,20 17.5,17 C17.5,14.5 19.5,13 21.5,13 C22.7,13 23.7,13.8 24,14.2 C24.3,13.8 25.3,13 26.5,13 C28.5,13 30.5,14.5 30.5,17 C30.5,20 27,22.5 24,25.5Z"
+          fill="#FF2D6B" transform="scale(0.5) translate(24, 22)"
+          style={{transformOrigin:'24px 22px'}}/>
+      </g>
+      {/* Cleaner heart shape centered at 24,22 */}
+      <path className="heart-beat" d="M24,26.5 C22,24 16,20 16,15.8 C16,13 18,11.5 20.2,11.5 C21.5,11.5 22.9,12.4 24,13.5 C25.1,12.4 26.5,11.5 27.8,11.5 C30,11.5 32,13 32,15.8 C32,20 26,24 24,26.5Z"
+        fill="none"
+        style={{display:'none'}}
+      />
+    </svg>
+  );
+}
+
+// Cleaner standalone heart logo
+function HeartRadarLogo({size=38}) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="sg2" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stopColor="rgba(61,219,192,0)"/>
+          <stop offset="100%" stopColor="rgba(61,219,192,0.9)"/>
+        </linearGradient>
+      </defs>
+      <circle cx="24" cy="24" r="21" fill="none" stroke="rgba(61,219,192,0.14)" strokeWidth="1"/>
+      <circle cx="24" cy="24" r="13.5" fill="none" stroke="rgba(61,219,192,0.2)" strokeWidth="1"/>
+      <circle cx="24" cy="24" r="7" fill="none" stroke="rgba(61,219,192,0.28)" strokeWidth="1"/>
+      <line x1="24" y1="3" x2="24" y2="45" stroke="rgba(61,219,192,0.09)" strokeWidth="0.7"/>
+      <line x1="3" y1="24" x2="45" y2="24" stroke="rgba(61,219,192,0.09)" strokeWidth="0.7"/>
+      <g className="scan-arm">
+        <path d="M24 24 L45 24" stroke="url(#sg2)" strokeWidth="1.5" strokeLinecap="round"/>
+      </g>
+      <circle className="ping-ring"   cx="24" cy="22" r="5" fill="none" stroke="rgba(255,45,107,0.6)" strokeWidth="1.3"/>
+      <circle className="ping-ring-2" cx="24" cy="22" r="5" fill="none" stroke="rgba(255,45,107,0.35)" strokeWidth="1"/>
+      <g className="heart-beat" style={{transformOrigin:'24px 22px'}}>
+        <path d="M24,27 C23.5,26.3 17,21.2 17,16.5 C17,13.5 19.2,12 21.5,12 C22.8,12 24,13.1 24,13.1 C24,13.1 25.2,12 26.5,12 C28.8,12 31,13.5 31,16.5 C31,21.2 24.5,26.3 24,27Z"
+          fill="#FF2D6B" filter="url(#hglow)"/>
+      </g>
+      <defs>
+        <filter id="hglow" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="1.5" result="blur"/>
+          <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+      </defs>
+    </svg>
+  );
+}
+
+// ── Circular Progress ─────────────────────────────────────────────────────────
+function CircProg({pct=0, size=70, color='#FF2D6B', label=''}) {
+  const r=14.5, C=2*Math.PI*r;
+  const filled=(pct/100)*C;
+  return (
+    <svg width={size} height={size} viewBox="0 0 36 36">
+      <circle className="circ-bg" cx="18" cy="18" r={r}/>
+      <circle className="circ-fill" cx="18" cy="18" r={r}
+        stroke={color}
+        strokeDasharray={`${filled} ${C}`}
+        transform="rotate(-90 18 18)"
+      />
+      <text x="18" y="17.5" className="circ-num" dominantBaseline="middle">{pct}%</text>
+      {label && <text x="18" y="23" className="circ-sub">{label}</text>}
+    </svg>
+  );
+}
+
+// ── HCheck Box ────────────────────────────────────────────────────────────────
+function HCheck({done, onClick}) {
+  return (
+    <div className={`hcheck${done?' on':''}`} onClick={onClick}>
+      {done && <IcoCheck/>}
+    </div>
+  );
+}
+
+// ── Chip ──────────────────────────────────────────────────────────────────────
+function Chip({cat}) {
+  const c=CATS[cat]||CATS.other;
+  return <span className={`chip ${c.chip}`}>{c.emoji} {c.label}</span>;
+}
+
+// ── App Root ──────────────────────────────────────────────────────────────────
+function App() {
+  const [tab, setTab]   = useState('today');
+  const [curDate, setCurDate] = useState(new Date());
+
+  const sto = (k,fb) => {
+    try { const v=localStorage.getItem(k); return v?JSON.parse(v):fb; } catch{ return fb; }
+  };
+  const [habits,    setHabits]    = useState(()=>sto('lt2_habits', DEFAULT_HABITS));
+  const [habitLogs, setHabitLogs] = useState(()=>sto('lt2_logs',{}));
+  const [tasks,     setTasks]     = useState(()=>sto('lt2_tasks',{}));
+  const [moods,     setMoods]     = useState(()=>sto('lt2_moods',{}));
+  const [notes,     setNotes]     = useState(()=>sto('lt2_notes',{}));
+
+  useEffect(()=>{localStorage.setItem('lt2_habits',JSON.stringify(habits));},[habits]);
+  useEffect(()=>{localStorage.setItem('lt2_logs',JSON.stringify(habitLogs));},[habitLogs]);
+  useEffect(()=>{localStorage.setItem('lt2_tasks',JSON.stringify(tasks));},[tasks]);
+  useEffect(()=>{localStorage.setItem('lt2_moods',JSON.stringify(moods));},[moods]);
+  useEffect(()=>{localStorage.setItem('lt2_notes',JSON.stringify(notes));},[notes]);
+
+  const toggleHabit=(ds,hid)=>setHabitLogs(p=>{
+    const n={...p};
+    if(!n[ds])n[ds]={};
+    n[ds][hid]=!n[ds][hid];
+    return n;
+  });
+  const toggleTask=(ds,tid)=>setTasks(p=>({...p,[ds]:(p[ds]||[]).map(t=>t.id===tid?{...t,done:!t.done}:t)}));
+  const addTask=(ds,text)=>{
+    if(!text.trim())return;
+    setTasks(p=>({...p,[ds]:[...(p[ds]||[]),{id:Date.now().toString(),text,done:false}]}));
+  };
+  const deleteTask=(ds,tid)=>setTasks(p=>({...p,[ds]:(p[ds]||[]).filter(t=>t.id!==tid)}));
+  const setMood=(ds,v)=>setMoods(p=>({...p,[ds]:v}));
+  const setNote=(ds,t)=>setNotes(p=>({...p,[ds]:t}));
+
+  const shared={habits,setHabits,habitLogs,toggleHabit,tasks,toggleTask,addTask,deleteTask,
+                moods,setMood,notes,setNote,curDate,setCurDate};
+
+  const viewMap={
+    today:     <TodayView    {...shared}/>,
+    habits:    <HabitsTracker {...shared}/>,
+    planner:   <WeeklyPlanner {...shared}/>,
+    analytics: <Analytics    {...shared}/>,
+    manage:    <ManageGoals  {...shared}/>,
+  };
+
+  const todayLabel = new Date().toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
+
+  return (
+    <div id="app">
+      {/* Sidebar */}
+      <aside className="sidebar">
+        <div className="sidebar-logo">
+          <HeartRadarLogo size={40}/>
+          <div className="sidebar-wordmark">
+            <strong>LifeTracker</strong>
+            <span>OS · v2</span>
+          </div>
+        </div>
+        <div className="sidebar-date">{fmtDate(new Date())}</div>
+        <div className="sidebar-divider"/>
+        <nav className="sidebar-nav">
+          {NAV.map(n=>(
+            <button key={n.id} className={`nav-btn${tab===n.id?' active':''}`} onClick={()=>setTab(n.id)}>
+              {n.icon(tab===n.id)} {n.label}
+            </button>
+          ))}
+        </nav>
+        <div className="sidebar-footer">LifeTracker OS · All data stored locally</div>
+      </aside>
+
+      {/* Mobile Header */}
+      <header className="mob-header">
+        <div className="mob-header-brand">
+          <HeartRadarLogo size={28}/>
+          <strong>LifeTracker OS</strong>
+        </div>
+        <span className="mob-date">{todayLabel}</span>
+      </header>
+
+      {/* Main */}
+      <main className="main">
+        <div className="anim-up" key={tab}>
+          {viewMap[tab]}
+        </div>
+      </main>
+
+      {/* Bottom Nav */}
+      <nav className="bot-nav">
+        <div className="bot-nav-inner">
+          {NAV.map(n=>(
+            <button key={n.id} className={`bot-btn${tab===n.id?' active':''}`} onClick={()=>setTab(n.id)}>
+              {n.icon(tab===n.id)}
+              {n.label}
+            </button>
+          ))}
+        </div>
+      </nav>
+    </div>
+  );
+}
+
+// ── TODAY VIEW ────────────────────────────────────────────────────────────────
+function TodayView({habits,habitLogs,toggleHabit,tasks,addTask,toggleTask,deleteTask,moods,setMood,notes,setNote}) {
+  const ds=todayStr();
+  const todayTasks=tasks[ds]||[];
+  const todayMood=moods[ds];
+  const [taskInput,setTaskInput]=useState('');
+  const [noteVal,setNoteVal]=useState(notes[ds]||'');
+
+  const doneHabits=habits.filter(h=>habitLogs[ds]?.[h.id]).length;
+  const habitPct=habits.length===0?0:Math.round((doneHabits/habits.length)*100);
+  const doneTasks=todayTasks.filter(t=>t.done).length;
+  const taskPct=todayTasks.length===0?0:Math.round((doneTasks/todayTasks.length)*100);
+
+  const topStreak=habits.map(h=>({...h,s:getStreak(h.id,habitLogs)})).sort((a,b)=>b.s-a.s)[0];
+
+  const submitTask=()=>{ addTask(ds,taskInput); setTaskInput(''); };
+  const saveNote=()=>setNote(ds,noteVal);
+
+  return (
+    <div>
+      <div className="page-header">
+        <div className="page-header-left">
+          <div style={{fontSize:12,color:'var(--t2)',marginBottom:3}}>{fmtDate(new Date())}</div>
+          <h1 className="page-title">Good {greet()} 👋</h1>
+        </div>
+      </div>
+
+      {/* Stat strip */}
+      <div className="stat-grid">
+        <div className="stat-card">
+          <div className="stat-label">Habits Today</div>
+          <div className="stat-value" style={{color:'var(--pulse)'}}>{doneHabits}<span style={{fontSize:14,color:'var(--t2)',fontWeight:500}}>/{habits.length}</span></div>
+          <div className="track" style={{marginBottom:6}}><div className="fill" style={{width:`${habitPct}%`}}/></div>
+          <div className="stat-sub">{habitPct}% complete</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-label">Tasks Done</div>
+          <div className="stat-value" style={{color:'var(--signal)'}}>{doneTasks}<span style={{fontSize:14,color:'var(--t2)',fontWeight:500}}>/{todayTasks.length}</span></div>
+          <div className="track" style={{marginBottom:6}}><div className="fill fill-teal" style={{width:`${taskPct}%`}}/></div>
+          <div className="stat-sub">{todayTasks.length===0?'No tasks yet':`${taskPct}% done`}</div>
+        </div>
+        {topStreak && topStreak.s > 0 && (
+          <div className="stat-card">
+            <div className="stat-label">Best Streak</div>
+            <div className="stat-value" style={{color:'var(--ember)'}}>{topStreak.s}<span style={{fontSize:13,color:'var(--t2)',fontWeight:500}}> days</span></div>
+            <div className="stat-sub">{topStreak.emoji} {topStreak.name}</div>
+          </div>
+        )}
+        <div className="stat-card">
+          <div className="stat-label">Today's Mood</div>
+          <div className="stat-value" style={{fontSize:32}}>{todayMood ? MOODS.find(m=>m.v===todayMood)?.emoji : '—'}</div>
+          <div className="stat-sub">{todayMood ? MOODS.find(m=>m.v===todayMood)?.label : 'Not logged'}</div>
+        </div>
+      </div>
+
+      {/* Habits quick-log */}
+      <div className="card" style={{padding:'18px',marginBottom:14}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
+          <span style={{fontWeight:700,fontSize:14}}>Today's Habits</span>
+          <CircProg pct={habitPct} size={52}/>
+        </div>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(195px,1fr))',gap:7}}>
+          {habits.map(h=>{
+            const done=!!habitLogs[ds]?.[h.id];
+            const s=getStreak(h.id,habitLogs);
+            return (
+              <div key={h.id} className={`habit-tile${done?' done':''}`} onClick={()=>toggleHabit(ds,h.id)}>
+                <HCheck done={done} onClick={()=>{}}/>
+                <span style={{fontSize:15,flexShrink:0}}>{h.emoji}</span>
+                <span className="habit-tile-name">{h.name}</span>
+                {s>1 && <span className="streak"><IcoFlame/>{s}</span>}
+              </div>
+            );
+          })}
+          {habits.length===0 && <div className="empty"><div className="empty-icon">✦</div>No habits yet — add some in Manage</div>}
+        </div>
+      </div>
+
+      {/* Mood + Note */}
+      <div className="today-two" style={{marginBottom:14}}>
+        <div className="card" style={{padding:'18px'}}>
+          <div style={{fontWeight:700,fontSize:14,marginBottom:14}}>How are you feeling?</div>
+          <div style={{display:'flex',gap:8,justifyContent:'space-between'}}>
+            {MOODS.map(m=>(
+              <button key={m.v} className={`mood-btn${todayMood===m.v?' active':''}`}
+                title={m.label} onClick={()=>setMood(ds,m.v)}>{m.emoji}</button>
+            ))}
+          </div>
+          {todayMood && <div style={{marginTop:10,fontSize:12,color:'var(--t2)',textAlign:'center'}}>{MOODS.find(m=>m.v===todayMood)?.label}</div>}
+        </div>
+        <div className="card" style={{padding:'18px'}}>
+          <div style={{fontWeight:700,fontSize:14,marginBottom:10}}>Daily Note</div>
+          <textarea className="inp"
+            value={noteVal}
+            onChange={e=>setNoteVal(e.target.value)}
+            onBlur={saveNote}
+            placeholder="Jot something down…"
+            style={{minHeight:80}}
+          />
+        </div>
+      </div>
+
+      {/* Tasks */}
+      <div className="card" style={{padding:'18px'}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
+          <span style={{fontWeight:700,fontSize:14}}>Today's Tasks</span>
+          {todayTasks.length>0 && <span style={{fontSize:11,color:'var(--t2)'}}>{doneTasks}/{todayTasks.length} done</span>}
+        </div>
+        <div style={{display:'flex',gap:7,marginBottom:12}}>
+          <input className="inp" value={taskInput} onChange={e=>setTaskInput(e.target.value)}
+            onKeyDown={e=>{if(e.key==='Enter')submitTask();}}
+            placeholder="Add a task and press Enter…"/>
+          <button className="btn-p" onClick={submitTask}><IcoPlus/></button>
+        </div>
+        {todayTasks.map(t=>(
+          <div key={t.id} className="task-row">
+            <HCheck done={t.done} onClick={()=>toggleTask(ds,t.id)}/>
+            <span className={`task-text${t.done?' done':''}`}>{t.text}</span>
+            <button className="btn-icon danger" onClick={()=>deleteTask(ds,t.id)}><IcoTrash/></button>
+          </div>
+        ))}
+        {todayTasks.length===0 && <div className="empty" style={{padding:'20px 0'}}><div className="empty-icon">📋</div>Nothing here yet</div>}
+      </div>
+    </div>
+  );
+}
+
+// ── HABITS TRACKER ────────────────────────────────────────────────────────────
+function HabitsTracker({habits,habitLogs,toggleHabit,curDate,setCurDate}) {
+  const y=curDate.getFullYear(), m=curDate.getMonth();
+  const days=getDatesOfMonth(y,m);
+  const monthName=curDate.toLocaleString('default',{month:'long'});
+
+  let totalP=habits.length*days.length, totalC=0;
+  days.forEach(d=>habits.forEach(h=>{if(habitLogs[d.dateStr]?.[h.id])totalC++;}));
+  const overallPct=totalP===0?0:Math.round((totalC/totalP)*100);
+
+  const exportCSV=()=>{
+    const hdr=['Habit',...days.map(d=>d.dayNum),'%'];
+    const rows=habits.map(h=>{
+      const c=days.filter(d=>habitLogs[d.dateStr]?.[h.id]).length;
+      return [h.name,...days.map(d=>habitLogs[d.dateStr]?.[h.id]?'1':'0'),Math.round((c/days.length)*100)+'%'];
+    });
+    downloadCSV([hdr,...rows].map(r=>r.join(',')).join('\n'),`habits-${monthName}-${y}.csv`);
+  };
+
+  return (
+    <div>
+      <div className="page-header">
+        <div className="page-header-left">
+          <h1 className="page-title">Monthly Habits</h1>
+          <div className="page-sub">Click any cell to log or un-log a day</div>
+        </div>
+        <div className="page-header-right">
+          <button className="btn-s" onClick={()=>setCurDate(new Date(y,m-1,1))}><IcoPrev/></button>
+          <span style={{fontWeight:700,fontSize:14,minWidth:120,textAlign:'center'}}>{monthName} {y}</span>
+          <button className="btn-s" onClick={()=>setCurDate(new Date(y,m+1,1))}><IcoNext/></button>
+          <button className="btn-g" onClick={()=>setCurDate(new Date())}>Today</button>
+          <button className="btn-g" onClick={exportCSV}><IcoExport/>Export CSV</button>
+        </div>
+      </div>
+
+      <div className="stat-grid" style={{marginBottom:18}}>
+        <div className="stat-card">
+          <div className="stat-label">Month Progress</div>
+          <div className="stat-value" style={{color:'var(--pulse)'}}>{overallPct}%</div>
+          <div className="track" style={{marginBottom:5}}><div className="fill" style={{width:`${overallPct}%`}}/></div>
+          <div className="stat-sub">{totalC} of {totalP} checks</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-label">Habits Tracked</div>
+          <div className="stat-value" style={{color:'var(--signal)'}}>{habits.length}</div>
+          <div className="stat-sub">across {days.length} days</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-label">Days Perfect</div>
+          <div className="stat-value" style={{color:'var(--ember)'}}>{
+            days.filter(d=>{
+              if(habits.length===0)return false;
+              return habits.every(h=>habitLogs[d.dateStr]?.[h.id]);
+            }).length
+          }</div>
+          <div className="stat-sub">all habits done</div>
+        </div>
+      </div>
+
+      <div className="card" style={{padding:0,overflow:'hidden'}}>
+        <div style={{overflowX:'auto'}}>
+          <table className="hgrid">
+            <thead>
+              <tr>
+                <th className="sticky-col" style={{minWidth:170}}>Habit</th>
+                {days.map(d=>(
+                  <th key={d.dayNum} className={d.isToday?'today-head':''} style={{minWidth:30,padding:'6px 2px'}}>
+                    <div style={{fontSize:8.5,textTransform:'uppercase',letterSpacing:'.05em'}}>{d.dowFull}</div>
+                    <div style={{fontSize:12,fontWeight:700,color:d.isToday?'var(--pulse)':d.isWeekend?'var(--t3)':'var(--t1)'}}>{d.dayNum}</div>
+                    {d.isToday&&<div className="today-dot"/>}
+                  </th>
+                ))}
+                <th style={{minWidth:90,padding:'8px 12px',textAlign:'center'}}>Progress</th>
+              </tr>
+            </thead>
+            <tbody>
+              {habits.map(h=>{
+                let c=0;
+                days.forEach(d=>{if(habitLogs[d.dateStr]?.[h.id])c++;});
+                const rowPct=Math.round((c/days.length)*100);
+                const streak=getStreak(h.id,habitLogs);
+                return (
+                  <tr key={h.id}>
+                    <td className="habit-name-cell">
+                      <div style={{display:'flex',alignItems:'center',gap:7}}>
+                        <span style={{fontSize:14}}>{h.emoji}</span>
+                        <span style={{fontSize:12.5,fontWeight:500,color:'var(--t1)'}}>{h.name}</span>
+                        {streak>1&&<span className="streak"><IcoFlame/>{streak}</span>}
+                      </div>
+                    </td>
+                    {days.map(d=>{
+                      const done=!!habitLogs[d.dateStr]?.[h.id];
+                      return (
+                        <td key={d.dayNum} className={`check-cell${d.isToday?' today-col':''}`}
+                          onClick={()=>toggleHabit(d.dateStr,h.id)}>
+                          <div className={`cell-box${done?' on':''}`}>
+                            {done&&<IcoCheck/>}
+                          </div>
+                        </td>
+                      );
+                    })}
+                    <td className="prog-cell">
+                      <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:4}}>
+                        <div className="track" style={{width:64}}><div className="fill" style={{width:`${rowPct}%`}}/></div>
+                        <span style={{fontSize:10.5,color:'var(--t2)',fontWeight:600}}>{rowPct}%</span>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td className="sticky-col" style={{fontSize:9.5,fontWeight:700,color:'var(--t3)',letterSpacing:'.07em',textTransform:'uppercase'}}>Daily Score</td>
+                {days.map(d=>{
+                  let dc=0; habits.forEach(h=>{if(habitLogs[d.dateStr]?.[h.id])dc++;});
+                  const dp=habits.length===0?0:Math.round((dc/habits.length)*100);
+                  return (
+                    <td key={d.dayNum} className={d.isToday?'today-col':''}>
+                      <div style={{display:'flex',flexDirection:'column',alignItems:'center',height:50,justifyContent:'flex-end',gap:2,paddingBottom:2}}>
+                        {dp>0&&<span style={{fontSize:8,color:'var(--t3)'}}>{dp}%</span>}
+                        <div className={`mini-bar${dp===100?' full-day':dp>0?' has-some':''}`}
+                          style={{width:14,height:`${Math.max(dp*.38,2)}px`}}/>
+                      </div>
+                    </td>
+                  );
+                })}
+                <td style={{background:'var(--bg-elevated)'}}/>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── WEEKLY PLANNER ────────────────────────────────────────────────────────────
+function WeeklyPlanner({curDate,setCurDate,tasks,toggleTask,addTask,deleteTask,habits,habitLogs,toggleHabit}) {
+  const week=getWeek(curDate);
+  const [activeDs,setActiveDs]=useState(todayStr());
+  const [taskInput,setTaskInput]=useState('');
+
+  // If active day not in current week after navigation, reset to first day of week
+  useEffect(()=>{
+    if(!week.find(d=>d.dateStr===activeDs)) setActiveDs(week[0].dateStr);
+  },[curDate]);
+
+  const nextWeek=()=>{const d=new Date(curDate);d.setDate(d.getDate()+7);setCurDate(d);};
+  const prevWeek=()=>{const d=new Date(curDate);d.setDate(d.getDate()-7);setCurDate(d);};
+
+  const submitTask=()=>{ addTask(activeDs,taskInput); setTaskInput(''); };
+  const activeDay=week.find(d=>d.dateStr===activeDs)||week[0];
+  const dayTasks=tasks[activeDs]||[];
+  const doneTasks=dayTasks.filter(t=>t.done).length;
+  const taskPct=dayTasks.length===0?0:Math.round((doneTasks/dayTasks.length)*100);
+  const doneHabits=habits.filter(h=>habitLogs[activeDs]?.[h.id]).length;
+  const habitPct=habits.length===0?0:Math.round((doneHabits/habits.length)*100);
+
+  const weekRange=`${week[0].monthShort} ${week[0].dayNum} – ${week[6].monthShort} ${week[6].dayNum}`;
+
+  return (
+    <div>
+      <div className="page-header">
+        <div className="page-header-left">
+          <h1 className="page-title">Weekly Planner</h1>
+          <div className="page-sub">{weekRange}</div>
+        </div>
+        <div className="page-header-right">
+          <button className="btn-s" onClick={prevWeek}><IcoPrev/></button>
+          <button className="btn-g" onClick={()=>setCurDate(new Date())}>This Week</button>
+          <button className="btn-s" onClick={nextWeek}><IcoNext/></button>
+        </div>
+      </div>
+
+      {/* Day strip */}
+      <div className="day-strip">
+        {week.map(d=>{
+          const dt=tasks[d.dateStr]||[];
+          const dp=dt.length===0?0:Math.round((dt.filter(t=>t.done).length/dt.length)*100);
+          return (
+            <button key={d.dateStr}
+              className={`day-btn${activeDs===d.dateStr?' active':''}${d.isToday&&activeDs!==d.dateStr?' is-today':''}`}
+              onClick={()=>setActiveDs(d.dateStr)}>
+              <span className="day-name-short">{d.dayShort}</span>
+              <span className="day-num-big">{d.dayNum}</span>
+              {dt.length>0&&(
+                <div className="day-mini-track">
+                  <div className="day-mini-fill" style={{width:`${dp}%`}}/>
+                </div>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Day detail */}
+      <div className="planner-grid">
+        {/* Tasks panel */}
+        <div className="card" style={{padding:'20px'}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:18}}>
+            <div>
+              <div style={{fontWeight:800,fontSize:17,letterSpacing:'-.02em'}}>{activeDay.dayName}</div>
+              <div style={{fontSize:12,color:'var(--t2)',marginTop:2}}>{activeDay.formattedStr}</div>
+            </div>
+            <CircProg pct={taskPct} size={58}/>
+          </div>
+
+          <div style={{display:'flex',gap:7,marginBottom:14}}>
+            <input className="inp" value={taskInput}
+              onChange={e=>setTaskInput(e.target.value)}
+              onKeyDown={e=>{if(e.key==='Enter')submitTask();}}
+              placeholder="Add a task…"/>
+            <button className="btn-p" onClick={submitTask}><IcoPlus/></button>
+          </div>
+
+          {dayTasks.map(t=>(
+            <div key={t.id} className="task-row">
+              <HCheck done={t.done} onClick={()=>toggleTask(activeDs,t.id)}/>
+              <span className={`task-text${t.done?' done':''}`}>{t.text}</span>
+              <button className="btn-icon danger" onClick={()=>deleteTask(activeDs,t.id)}><IcoTrash/></button>
+            </div>
+          ))}
+          {dayTasks.length===0 && (
+            <div className="empty"><div className="empty-icon">📋</div>No tasks · add one above</div>
+          )}
+        </div>
+
+        {/* Habit sidebar */}
+        <div>
+          <div className="card" style={{padding:'18px'}}>
+            <div style={{fontWeight:700,fontSize:13,marginBottom:14,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+              <span style={{color:'var(--t2)',fontSize:10,fontWeight:700,letterSpacing:'.1em',textTransform:'uppercase'}}>Habits</span>
+              <CircProg pct={habitPct} size={46} color="var(--signal)"/>
+            </div>
+            <div style={{display:'flex',flexDirection:'column',gap:5}}>
+              {habits.map(h=>{
+                const done=!!habitLogs[activeDs]?.[h.id];
+                return (
+                  <div key={h.id}
+                    onClick={()=>toggleHabit(activeDs,h.id)}
+                    style={{
+                      display:'flex',alignItems:'center',gap:8,padding:'7px 9px',
+                      borderRadius:8,cursor:'pointer',transition:'all .15s',
+                      background:done?'rgba(255,45,107,.06)':'transparent',
+                      border:`1px solid ${done?'rgba(255,45,107,.18)':'transparent'}`
+                    }}>
+                    <HCheck done={done} onClick={()=>{}}/>
+                    <span style={{fontSize:13}}>{h.emoji}</span>
+                    <span style={{fontSize:12,color:done?'var(--t2)':'var(--t1)',textDecoration:done?'line-through':'none',flex:1,overflow:'hidden',whiteSpace:'nowrap',textOverflow:'ellipsis'}}>
+                      {h.name}
+                    </span>
+                  </div>
+                );
+              })}
+              {habits.length===0&&<div className="empty" style={{padding:'16px 0',fontSize:12}}>No habits yet</div>}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── ANALYTICS ─────────────────────────────────────────────────────────────────
+function Analytics({habits,habitLogs,moods,tasks,curDate,setCurDate}) {
+  const y=curDate.getFullYear(), m=curDate.getMonth();
+  const days=getDatesOfMonth(y,m);
+  const monthName=curDate.toLocaleString('default',{month:'long'});
+
+  const habitStats=habits.map(h=>{
+    let c=0; days.forEach(d=>{if(habitLogs[d.dateStr]?.[h.id])c++;});
+    const pct=days.length===0?0:Math.round((c/days.length)*100);
+    return {...h,completions:c,pct,streak:getStreak(h.id,habitLogs),longest:getLongestStreak(h.id,habitLogs)};
+  }).sort((a,b)=>b.pct-a.pct);
+
+  const moodEntries=days.filter(d=>moods[d.dateStr]).map(d=>moods[d.dateStr]);
+  const avgMood=moodEntries.length===0?null:(moodEntries.reduce((a,b)=>a+b,0)/moodEntries.length).toFixed(1);
+
+  const allTasks=Object.values(tasks).flat();
+  const doneTasks=allTasks.filter(t=>t.done).length;
+  const taskPct=allTasks.length===0?0:Math.round((doneTasks/allTasks.length)*100);
+
+  // Category breakdown
+  const catStats={};
+  habits.forEach(h=>{
+    const cat=h.category||'other';
+    if(!catStats[cat]){catStats[cat]={total:0,done:0};}
+    days.forEach(d=>{
+      catStats[cat].total++;
+      if(habitLogs[d.dateStr]?.[h.id])catStats[cat].done++;
+    });
+  });
+
+  const activeStreaks=habits.filter(h=>getStreak(h.id,habitLogs)>0).length;
+
+  const pctColor=(p)=>p>=80?'var(--success)':p>=50?'var(--ember)':'var(--pulse)';
+
+  return (
+    <div>
+      <div className="page-header">
+        <div className="page-header-left">
+          <h1 className="page-title">Analytics</h1>
+          <div className="page-sub">{monthName} {y} · overview</div>
+        </div>
+        <div className="page-header-right">
+          <button className="btn-s" onClick={()=>setCurDate(new Date(y,m-1,1))}><IcoPrev/></button>
+          <span style={{fontWeight:700,fontSize:13,minWidth:100,textAlign:'center'}}>{monthName} {y}</span>
+          <button className="btn-s" onClick={()=>setCurDate(new Date(y,m+1,1))}><IcoNext/></button>
+        </div>
+      </div>
+
+      <div className="stat-grid">
+        {[
+          {label:'Top Habit',value:habitStats[0]?habitStats[0].pct+'%':'—',sub:habitStats[0]?.name||'No data',color:'var(--pulse)'},
+          {label:'Avg Mood',value:avgMood||'—',sub:`${moodEntries.length} entries`,color:'var(--ember)'},
+          {label:'Task Rate (All)',value:taskPct+'%',sub:`${doneTasks}/${allTasks.length} done`,color:'var(--signal)'},
+          {label:'Active Streaks',value:activeStreaks,sub:'habits on a roll',color:'var(--violet)'},
+        ].map(c=>(
+          <div key={c.label} className="stat-card">
+            <div className="stat-label">{c.label}</div>
+            <div className="stat-value" style={{color:c.color,fontSize:c.value.toString().length>4?22:30}}>{c.value}</div>
+            <div className="stat-sub" style={{overflow:'hidden',whiteSpace:'nowrap',textOverflow:'ellipsis'}}>{c.sub}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Habit Leaderboard */}
+      <div className="card" style={{padding:'20px',marginBottom:14}}>
+        <div style={{fontWeight:700,fontSize:14,marginBottom:16}}>Habit Leaderboard · {monthName}</div>
+        <div style={{display:'flex',flexDirection:'column',gap:11}}>
+          {habitStats.map((h,i)=>(
+            <div key={h.id} className="leaderboard-row">
+              <div className="leaderboard-rank">{i+1}</div>
+              <div className="leaderboard-emoji">{h.emoji}</div>
+              <div className="leaderboard-body">
+                <div className="leaderboard-name">
+                  <span style={{overflow:'hidden',whiteSpace:'nowrap',textOverflow:'ellipsis'}}>{h.name}</span>
+                  <span className="leaderboard-pct" style={{color:pctColor(h.pct)}}>{h.pct}%</span>
+                </div>
+                <div className="track"><div className="fill" style={{width:`${h.pct}%`,background:`linear-gradient(90deg,${pctColor(h.pct)},${pctColor(h.pct)}88)`}}/></div>
+              </div>
+              <div style={{display:'flex',gap:5,alignItems:'center',flexShrink:0}}>
+                {h.streak>0&&<span className="streak"><IcoFlame/>{h.streak}</span>}
+                {h.longest>0&&<span style={{fontSize:10,color:'var(--t3)',whiteSpace:'nowrap'}}>Best&nbsp;{h.longest}</span>}
+              </div>
+            </div>
+          ))}
+          {habitStats.length===0&&<div className="empty" style={{padding:'20px 0',fontSize:12}}>No habit data for this month</div>}
+        </div>
+      </div>
+
+      {/* Category Breakdown */}
+      {Object.keys(catStats).length>0&&(
+        <div className="card" style={{padding:'20px'}}>
+          <div style={{fontWeight:700,fontSize:14,marginBottom:14}}>By Category</div>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))',gap:10}}>
+            {Object.entries(catStats).map(([cat,s])=>{
+              const cfg=CATS[cat]||CATS.other;
+              const pct=s.total===0?0:Math.round((s.done/s.total)*100);
+              return (
+                <div key={cat} className="card-inner" style={{padding:'14px'}}>
+                  <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:8}}>
+                    <span style={{fontSize:15}}>{cfg.emoji}</span>
+                    <Chip cat={cat}/>
+                  </div>
+                  <div style={{fontSize:24,fontWeight:800,letterSpacing:'-.03em',color:pctColor(pct),marginBottom:6}}>{pct}%</div>
+                  <div className="track"><div className="fill" style={{width:`${pct}%`}}/></div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Mood trend */}
+      {moodEntries.length>0&&(
+        <div className="card" style={{padding:'20px',marginTop:14}}>
+          <div style={{fontWeight:700,fontSize:14,marginBottom:14}}>Mood This Month</div>
+          <div style={{display:'flex',alignItems:'flex-end',gap:4,height:70}}>
+            {days.map(d=>{
+              const mv=moods[d.dateStr];
+              if(!mv)return <div key={d.dayNum} style={{flex:1,height:4,background:'var(--border)',borderRadius:'2px 2px 0 0',alignSelf:'flex-end'}}/>;
+              const h=(mv/5)*60;
+              const col=mv>=4?'var(--success)':mv>=3?'var(--signal)':mv>=2?'var(--ember)':'var(--pulse)';
+              return (
+                <div key={d.dayNum} title={`Day ${d.dayNum}: ${MOODS.find(mm=>mm.v===mv)?.label}`}
+                  style={{flex:1,height:`${h}px`,background:col,borderRadius:'3px 3px 0 0',alignSelf:'flex-end',cursor:'default',transition:'opacity .2s',minHeight:4}}
+                  onMouseEnter={e=>e.target.style.opacity='.7'}
+                  onMouseLeave={e=>e.target.style.opacity='1'}
+                />
+              );
+            })}
+          </div>
+          <div style={{display:'flex',justifyContent:'space-between',marginTop:4,fontSize:9,color:'var(--t3)'}}>
+            <span>1</span><span>{monthName}</span><span>{days.length}</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── MANAGE GOALS ──────────────────────────────────────────────────────────────
+function ManageGoals({habits,setHabits}) {
+  const [name,setName]=useState('');
+  const [emoji,setEmoji]=useState('✦');
+  const [cat,setCat]=useState('productivity');
+  const [editingId,setEditingId]=useState(null);
+
+  const handleAdd=()=>{
+    if(!name.trim())return;
+    setHabits([...habits,{id:Date.now().toString(),name:name.trim(),emoji,category:cat}]);
+    setName(''); setEmoji('✦');
+  };
+  const handleDelete=(id)=>{
+    if(confirm('Delete this habit? Check history remains.'))
+      setHabits(habits.filter(h=>h.id!==id));
+  };
+  const update=(id,field,val)=>setHabits(habits.map(h=>h.id===id?{...h,[field]:val}:h));
+
+  const CatSelect=({value,onChange,style={}})=>(
+    <select className="inp" value={value} onChange={e=>onChange(e.target.value)} style={style}>
+      {Object.entries(CATS).map(([k,v])=>(
+        <option key={k} value={k}>{v.emoji} {v.label}</option>
+      ))}
+    </select>
+  );
+
+  return (
+    <div>
+      <div className="page-header">
+        <div className="page-header-left">
+          <h1 className="page-title">Manage Habits</h1>
+          <div className="page-sub">Create, edit, and organise your tracked habits</div>
+        </div>
+      </div>
+
+      {/* Add form */}
+      <div className="card" style={{padding:'20px',marginBottom:16}}>
+        <div style={{fontWeight:700,fontSize:13,marginBottom:14}}>Create New Habit</div>
+        <div className="manage-form-grid">
+          <input className="inp" value={emoji} onChange={e=>setEmoji(e.target.value)}
+            style={{textAlign:'center',fontSize:20,padding:'7px 4px'}} maxLength={2} placeholder="✦"/>
+          <input className="inp" value={name} onChange={e=>setName(e.target.value)}
+            onKeyDown={e=>{if(e.key==='Enter')handleAdd();}}
+            placeholder="Habit name, e.g. Read 20 pages"/>
+          <CatSelect value={cat} onChange={setCat}/>
+          <button className="btn-p" onClick={handleAdd}><IcoPlus/> Add</button>
+        </div>
+      </div>
+
+      {/* Habit list */}
+      <div className="card" style={{padding:'20px'}}>
+        <div style={{fontWeight:700,fontSize:13,marginBottom:14}}>
+          Your Habits
+          <span style={{color:'var(--t3)',fontWeight:400,fontSize:12,marginLeft:6}}>({habits.length})</span>
+        </div>
+        <div style={{display:'flex',flexDirection:'column',gap:7}}>
+          {habits.map(h=>{
+            const isEditing=editingId===h.id;
+            return (
+              <div key={h.id} style={{
+                display:'flex',alignItems:'center',gap:10,padding:'11px 13px',
+                borderRadius:10,background:'var(--bg-elevated)',border:'1px solid var(--border)',
+                transition:'border-color .15s'
+              }}>
+                {isEditing?(
+                  <>
+                    <input value={h.emoji} onChange={e=>update(h.id,'emoji',e.target.value)}
+                      style={{width:38,textAlign:'center',fontSize:18,background:'var(--bg-surface)',border:'1px solid var(--border)',borderRadius:6,color:'var(--t1)',padding:'4px'}} maxLength={2}/>
+                    <input value={h.name} onChange={e=>update(h.id,'name',e.target.value)}
+                      className="inp" style={{flex:1}}/>
+                    <CatSelect value={h.category||'other'} onChange={v=>update(h.id,'category',v)} style={{width:140}}/>
+                    <button className="btn-p" style={{padding:'7px 12px',fontSize:12}} onClick={()=>setEditingId(null)}>Done</button>
+                  </>
+                ):(
+                  <>
+                    <span style={{fontSize:18,flexShrink:0}}>{h.emoji}</span>
+                    <span style={{flex:1,fontSize:13,fontWeight:500,overflow:'hidden',whiteSpace:'nowrap',textOverflow:'ellipsis'}}>{h.name}</span>
+                    <Chip cat={h.category||'other'}/>
+                    <button className="btn-icon" onClick={()=>setEditingId(h.id)} title="Edit">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                    </button>
+                    <button className="btn-icon danger" onClick={()=>handleDelete(h.id)} title="Delete"><IcoTrash/></button>
+                  </>
+                )}
+              </div>
+            );
+          })}
+          {habits.length===0&&(
+            <div className="empty">
+              <div className="empty-icon">✦</div>
+              No habits yet — create your first one above
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Info card */}
+      <div style={{marginTop:14,padding:'14px 16px',borderRadius:10,background:'var(--pulse-dim)',border:'1px solid rgba(255,45,107,.18)',fontSize:12,color:'var(--t2)',lineHeight:1.6}}>
+        <strong style={{color:'var(--pulse)'}}>ℹ️ How it works</strong><br/>
+        Add habits here and track them daily on the <strong>Habits</strong> tab or via the quick-log on <strong>Today</strong>. Deleting a habit removes it from the list but keeps all check history in storage.
+      </div>
+    </div>
+  );
+}
+
+// ── Render ────────────────────────────────────────────────────────────────────
+ReactDOM.createRoot(document.getElementById('app-root')).render(<App/>);
+</script>
+</body>
+</html>
